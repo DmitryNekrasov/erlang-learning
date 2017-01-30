@@ -64,12 +64,28 @@ verdict() ->
     true -> "RE"
   end.
 
-controller() ->
+controller(PidTestingSystem) ->
   receive
     {client_app, PidMonitor, ProblemId} ->
       io:format("Controller get Problem ~w~n", [ProblemId]),
-      io:format("Controller update monitor~n"),
-      PidMonitor ! {controller, ProblemId, verdict()}
+      io:format("Controller send Problem ~w to Testing System~n", [ProblemId]),
+      PidTestingSystem ! {controller, self(), ProblemId},
+      receive
+        {testing_system, ProblemId, Verdict} ->
+          io:format("Controller get verdict - ~s (Problem ~w)~n", [Verdict, ProblemId]),
+          io:format("Controller update monitor~n"),
+          PidMonitor ! {controller, ProblemId, Verdict}
+      end
+  end.
+
+testingSystem() ->
+  receive
+    {controller, PidController, ProblemId} ->
+      io:format("Testing System get Problem ~w~n", [ProblemId]),
+      Verdict = verdict(),
+      io:format("Testing System get verdict - ~s (Problem ~w)~n", [Verdict, ProblemId]),
+      io:format("Testing System send verdict to controller~n"),
+      PidController ! {testing_system, ProblemId, Verdict}
   end.
 
 for(Callback, 1) -> Callback();
@@ -80,6 +96,7 @@ for(Callback, N) ->
 main() ->
   N = 4,
   PidMonitor = spawn(fun() -> for(fun() -> monitor() end, N) end),
-  PidController = spawn(fun() -> for(fun() -> controller() end, N) end),
+  PidTestingSystem = spawn(fun() -> for(fun() -> testingSystem() end, N) end),
+  PidController = spawn(fun() -> for(fun() -> controller(PidTestingSystem) end, N) end),
   PidClientApp = spawn(fun() -> for(fun() -> clientApp(PidMonitor, PidController) end, N) end),
   spawn(fun() -> for(fun() -> team(PidClientApp) end, N) end).
