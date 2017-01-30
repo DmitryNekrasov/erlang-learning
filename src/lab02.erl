@@ -11,28 +11,30 @@ teamAction() ->
   end.
 
 team(PidClientApp) ->
-  io:format("I'm Team, my pid is : ~w ~n", [self()]),
-  PidClientApp ! {team, self(), teamAction()},
+  TeamAction = teamAction(),
+  PidClientApp ! {team, self(), TeamAction},
   receive
     client_app -> io:format("(Team) Client App received~n")
   end.
 
+utility(PidMonitor, PidTeam) ->
+  PidMonitor ! {client_app, self()},
+  receive
+    monitor ->
+      io:format("(ClientApp) Monitor received~n"),
+      PidTeam ! client_app
+  end.
+
 clientApp(PidMonitor, PidController) ->
-  io:format("I'm Client App, my pid is : ~w ~n", [self()]),
   receive
     {team, PidTeam, get_monitor} ->
-      PidMonitor ! {client_app, self()},
-      receive
-        monitor ->
-          io:format("(ClientApp) Monitor received~n"),
-          PidTeam ! client_app
-      end;
-    {team, _, send_task} ->
-      PidController ! {client_app, PidMonitor}
+      utility(PidMonitor, PidTeam);
+    {team, PidTeam, send_task} ->
+      PidController ! {client_app, PidMonitor},
+      utility(PidMonitor, PidTeam)
   end.
 
 monitor() ->
-  io:format("I'm Monitor, my pid is : ~w ~n", [self()]),
   receive
     {client_app, ClientAppPid} ->
       io:format("(Monitor) Client App received~n"),
@@ -42,16 +44,20 @@ monitor() ->
   end.
 
 controller() ->
-  io:format("I'm Controller, my pid is : ~w ~n", [self()]),
   receive
     {client_app, PidMonitor} ->
       io:format("(Controller) Client App received~n"),
       PidMonitor ! controller
   end.
 
+for(Callback, 1) -> Callback();
+for(Callback, N) ->
+  Callback(),
+  for(Callback, N - 1).
+
 main() ->
-  PidMonitor = spawn(fun() -> monitor() end),
-  PidController = spawn(fun() -> controller() end),
-  PidClientApp = spawn(fun() -> clientApp(PidMonitor, PidController) end),
-  spawn(fun() -> team(PidClientApp) end),
-  erlang:display(hello).
+  N = 2,
+  PidMonitor = spawn(fun() -> for(fun() -> monitor() end, N) end),
+  PidController = spawn(fun() -> for(fun() -> controller() end, N) end),
+  PidClientApp = spawn(fun() -> for(fun() -> clientApp(PidMonitor, PidController) end, N) end),
+  spawn(fun() -> for(fun() -> team(PidClientApp) end, N) end).
