@@ -15,22 +15,28 @@ team(PidClientApp) ->
   if
     TeamAction == send_task ->
       ProblemId = rand:uniform(100),
+      timer:sleep(random:uniform(1000)),
       io:format("Team submit Problem ~w~n", [ProblemId]),
       PidClientApp ! {team, self(), ProblemId};
     true ->
+      timer:sleep(random:uniform(1000)),
       io:format("Team check monitor~n"),
       PidClientApp ! {team, self()}
   end,
   receive
-    client_app -> io:format("Team get monitor~n")
+    client_app ->
+      io:format("Team get monitor~n"),
+      team(PidClientApp)
   end.
 
 utility(PidMonitor, PidTeam) ->
+  timer:sleep(random:uniform(100)),
   io:format("Client App requested monitor~n"),
   PidMonitor ! {client_app, self()},
   receive
     monitor ->
       io:format("Client App get monitor~n"),
+      timer:sleep(random:uniform(1000)),
       io:format("Client App send monitor to team~n"),
       PidTeam ! client_app
   end.
@@ -38,20 +44,26 @@ utility(PidMonitor, PidTeam) ->
 clientApp(PidMonitor, PidController) ->
   receive
     {team, PidTeam} ->
-      utility(PidMonitor, PidTeam);
+      utility(PidMonitor, PidTeam),
+      clientApp(PidMonitor, PidController);
     {team, PidTeam, ProblemId} ->
+      timer:sleep(random:uniform(1000)),
       io:format("Client App send problem ~w~n", [ProblemId]),
       PidController ! {client_app, PidMonitor, ProblemId},
-      utility(PidMonitor, PidTeam)
+      utility(PidMonitor, PidTeam),
+      clientApp(PidMonitor, PidController)
   end.
 
 monitor() ->
   receive
     {client_app, ClientAppPid} ->
+      timer:sleep(random:uniform(1000)),
       io:format("Monitor returned to client app~n"),
-      ClientAppPid ! monitor;
+      ClientAppPid ! monitor,
+      monitor();
     {controller, ProblemId, Verdict} ->
-      io:format("Monitor get ~s (Problem ~w)~n", [Verdict, ProblemId])
+      io:format("Monitor get ~s (Problem ~w)~n", [Verdict, ProblemId]),
+      monitor()
   end.
 
 verdict() ->
@@ -68,13 +80,16 @@ controller(PidTestingSystem) ->
   receive
     {client_app, PidMonitor, ProblemId} ->
       io:format("Controller get Problem ~w~n", [ProblemId]),
+      timer:sleep(random:uniform(1000)),
       io:format("Controller send Problem ~w to Testing System~n", [ProblemId]),
       PidTestingSystem ! {controller, self(), ProblemId},
       receive
         {testing_system, ProblemId, Verdict} ->
           io:format("Controller get verdict - ~s (Problem ~w)~n", [Verdict, ProblemId]),
+          timer:sleep(random:uniform(1000)),
           io:format("Controller update monitor~n"),
-          PidMonitor ! {controller, ProblemId, Verdict}
+          PidMonitor ! {controller, ProblemId, Verdict},
+          controller(PidTestingSystem)
       end
   end.
 
@@ -84,19 +99,16 @@ testingSystem() ->
       io:format("Testing System get Problem ~w~n", [ProblemId]),
       Verdict = verdict(),
       io:format("Testing System get verdict - ~s (Problem ~w)~n", [Verdict, ProblemId]),
+      timer:sleep(random:uniform(1000)),
       io:format("Testing System send verdict to controller~n"),
-      PidController ! {testing_system, ProblemId, Verdict}
+      PidController ! {testing_system, ProblemId, Verdict},
+      testingSystem()
   end.
 
-for(Callback, 1) -> Callback();
-for(Callback, N) ->
-  Callback(),
-  for(Callback, N - 1).
-
 main() ->
-  N = 4,
-  PidMonitor = spawn(fun() -> for(fun() -> monitor() end, N) end),
-  PidTestingSystem = spawn(fun() -> for(fun() -> testingSystem() end, N) end),
-  PidController = spawn(fun() -> for(fun() -> controller(PidTestingSystem) end, N) end),
-  PidClientApp = spawn(fun() -> for(fun() -> clientApp(PidMonitor, PidController) end, N) end),
-  spawn(fun() -> for(fun() -> team(PidClientApp) end, N) end).
+  PidMonitor = spawn(fun() -> monitor() end),
+  PidTestingSystem = spawn(fun() ->  testingSystem() end),
+  PidController = spawn(fun() -> controller(PidTestingSystem) end),
+  PidClientApp = spawn(fun() -> clientApp(PidMonitor, PidController) end),
+  spawn(fun() -> team(PidClientApp) end),
+  timer:sleep(20000).
