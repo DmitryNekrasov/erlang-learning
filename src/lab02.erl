@@ -1,7 +1,7 @@
 -module(lab02).
 -author("nekrasov").
 
--export([main/0, startMonitor/0, startTestingSystem/0, startController/1, startClientApp/2, startTeam/1]).
+-export([main/0, startMonitor/1, startTestingSystem/1, startController/2, startClientApp/3, startTeam/1]).
 
 teamAction() ->
   Rand = rand:uniform(2),
@@ -113,43 +113,63 @@ main() ->
   spawn(fun() -> team(PidClientApp) end),
   timer:sleep(300000).
 
-startMonitor() ->
-  PidMonitor = spawn(fun() -> monitor() end),
-  global:register_name(monitor, PidMonitor),
-  timer:sleep(300000).
-
-startTestingSystem() ->
-  PidTestingSystem = spawn(fun() ->  testingSystem() end),
-  global:register_name(testing_system, PidTestingSystem),
-  timer:sleep(300000).
-
-startController(pong) ->
-  PidTestingSystem = global:whereis_name(testing_system),
-  PidController = spawn(fun() -> controller(PidTestingSystem) end),
-  global:register_name(controller, PidController),
-  timer:sleep(300000);
-startController(_) ->
+wait() ->
   erlang:display(wait),
-  timer:sleep(1000),
-  startController(net_adm:ping('testing_system@name.local')).
+  timer:sleep(1000).
 
-startClientApp(pong, pong) ->
+pingMonitor(_, pong) -> ok;
+pingMonitor(Name, _) ->
+  wait(),
+  pingMonitor(Name, net_adm:ping(Name)).
+
+pingTestingSystem(_, pong) -> ok;
+pingTestingSystem(Name, _) ->
+  wait(),
+  pingTestingSystem(Name, net_adm:ping(Name)).
+
+pingController(_, pong) -> ok;
+pingController(Name, _) ->
+  wait(),
+  pingController(Name, net_adm:ping(Name)).
+
+pingClientApp(_, pong) -> ok;
+pingClientApp(Name, _) ->
+  wait(),
+  pingClientApp(Name, net_adm:ping(Name)).
+
+pingTeam(_, pong) -> ok;
+pingTeam(Name, _) ->
+  wait(),
+  pingTeam(Name, net_adm:ping(Name)).
+
+startMonitor(ClientAppNodeName) ->
+  global:register_name(monitor, self()),
+  pingClientApp(ClientAppNodeName, pang),
+  monitor().
+
+startTestingSystem(ControllerNodeName) ->
+  global:register_name(testing_system, self()),
+  pingController(ControllerNodeName, pang),
+  testingSystem().
+
+startController(TestingSystemNodeName, MonitorNodeName) ->
+  global:register_name(controller, self()),
+  pingTestingSystem(TestingSystemNodeName, pang),
+  pingMonitor(MonitorNodeName, pang),
+  PidTestingSystem = global:whereis_name(testing_system),
+  controller(PidTestingSystem).
+
+startClientApp(ControllerNodeName, TeamNodeName, MonitorNodeName) ->
+  global:register_name(client_app, self()),
+  pingController(ControllerNodeName, pang),
+  pingTeam(TeamNodeName, pang),
+  pingMonitor(MonitorNodeName, pang),
   PidMonitor = global:whereis_name(monitor),
   PidController = global:whereis_name(controller),
-  PidClientApp = spawn(fun() -> clientApp(PidMonitor, PidController) end),
-  global:register_name(client_app, PidClientApp),
-  timer:sleep(300000);
-startClientApp(_, _) ->
-  erlang:display(wait),
-  timer:sleep(1000),
-  startClientApp(net_adm:ping('monitor@name.local'), net_adm:ping('controller@name.local')).
+  clientApp(PidMonitor, PidController).
 
-startTeam(pong) ->
+startTeam(ClientAppNodeName) ->
+  global:register_name(team, self()),
+  pingClientApp(ClientAppNodeName, pang),
   PidClientApp = global:whereis_name(client_app),
-  PidTeam = spawn(fun() -> team(PidClientApp) end),
-  global:register_name(team, PidTeam),
-  timer:sleep(300000);
-startTeam(_) ->
-  erlang:display(wait),
-  timer:sleep(1000),
-  startTeam(net_adm:ping('client_app@name.local')).
+  team(PidClientApp).
