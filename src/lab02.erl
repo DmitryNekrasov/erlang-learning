@@ -3,6 +3,8 @@
 
 -export([main/0, startMonitor/1, startTestingSystem/1, startController/2, startClientApp/3, startTeam/1]).
 
+formatMap(Map) -> formatList(maps:to_list(Map)).
+
 formatList(List) ->
   io:format("["),
   formatListU(List),
@@ -21,11 +23,18 @@ teamAction() ->
     true -> get_monitor
   end.
 
-team(PidClientApp) ->
+generateProblemId(Monitor) -> generateProblemId(Monitor, 0, "AC").
+
+generateProblemId(Monitor, _, "AC") ->
+  CandidateProblemId = rand:uniform(maps:size(Monitor)),
+  CandidateVerdict = maps:get(CandidateProblemId, Monitor),
+  generateProblemId(Monitor, CandidateProblemId, CandidateVerdict);
+generateProblemId(_, ProblemId, _) -> ProblemId.
+
+team(PidClientApp, ProblemId) ->
   TeamAction = teamAction(),
   if
     TeamAction == send_task ->
-      ProblemId = rand:uniform(100),
       timer:sleep(random:uniform(1000)),
       io:format("Team submit Problem ~w~n", [ProblemId]),
       PidClientApp ! {team, self(), ProblemId};
@@ -37,8 +46,9 @@ team(PidClientApp) ->
   receive
     {client_app, Monitor} ->
       io:format("Team get monitor: "),
-      formatList(Monitor),
-      team(PidClientApp)
+      formatMap(Monitor),
+      NewProblemId = generateProblemId(Monitor),
+      team(PidClientApp, NewProblemId)
   end.
 
 utility(PidMonitor, PidTeam) ->
@@ -48,7 +58,7 @@ utility(PidMonitor, PidTeam) ->
   receive
     {monitor, Monitor} ->
       io:format("Client App get monitor: "),
-      formatList(Monitor),
+      formatMap(Monitor),
       timer:sleep(random:uniform(1000)),
       io:format("Client App send monitor to team~n"),
       PidTeam ! {client_app, Monitor}
@@ -67,17 +77,16 @@ clientApp(PidMonitor, PidController) ->
       clientApp(PidMonitor, PidController)
   end.
 
-monitor() ->
+monitor(Monitor) ->
   receive
     {client_app, ClientAppPid} ->
       timer:sleep(random:uniform(1000)),
       io:format("Monitor returned to client app~n"),
-      Monitor = [{1, "AC"}, {2, "WA"}, {3, "TL"}],
       ClientAppPid ! {monitor, Monitor},
-      monitor();
+      monitor(Monitor);
     {controller, ProblemId, Verdict} ->
       io:format("Monitor get ~s (Problem ~w)~n", [Verdict, ProblemId]),
-      monitor()
+      monitor(maps:put(ProblemId, Verdict, Monitor))
   end.
 
 verdict() ->
@@ -119,12 +128,17 @@ testingSystem() ->
       testingSystem()
   end.
 
+initMonitor(Map, 0) -> Map;
+initMonitor(Map, N) ->
+  initMonitor(maps:put(N, "--", Map), N - 1).
+
 main() ->
-  PidMonitor = spawn(fun() -> monitor() end),
+  ProblemCount = 5,
+  PidMonitor = spawn(fun() -> monitor(initMonitor(maps:new(), ProblemCount)) end),
   PidTestingSystem = spawn(fun() ->  testingSystem() end),
   PidController = spawn(fun() -> controller(PidTestingSystem) end),
   PidClientApp = spawn(fun() -> clientApp(PidMonitor, PidController) end),
-  spawn(fun() -> team(PidClientApp) end),
+  spawn(fun() -> team(PidClientApp, rand:uniform(ProblemCount)) end),
   timer:sleep(300000).
 
 wait() ->
@@ -159,7 +173,7 @@ pingTeam(Name, _) ->
 startMonitor(ClientAppNodeName) ->
   global:register_name(monitor, self()),
   pingClientApp(ClientAppNodeName, pang),
-  monitor().
+  monitor(initMonitor(maps:new(), 5)).
 
 startTestingSystem(ControllerNodeName) ->
   global:register_name(testing_system, self()),
@@ -186,4 +200,5 @@ startTeam(ClientAppNodeName) ->
   global:register_name(team, self()),
   pingClientApp(ClientAppNodeName, pang),
   PidClientApp = global:whereis_name(client_app),
-  team(PidClientApp).
+  ProblemCount = 5,
+  team(PidClientApp, ProblemCount).
