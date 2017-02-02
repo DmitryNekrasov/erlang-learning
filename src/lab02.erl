@@ -173,7 +173,8 @@ pingTeam(Name, _) ->
 startMonitor(ClientAppNodeName) ->
   global:register_name(monitor, self()),
   pingClientApp(ClientAppNodeName, pang),
-  monitor(initMonitor(maps:new(), 5)).
+  ProblemCount = 5,
+  monitor(initMonitor(maps:new(), ProblemCount)).
 
 startTestingSystem(ControllerNodeName) ->
   global:register_name(testing_system, self()),
