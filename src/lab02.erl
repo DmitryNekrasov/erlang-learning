@@ -145,61 +145,41 @@ wait() ->
   erlang:display(wait),
   timer:sleep(1000).
 
-pingMonitor(_, pong) -> ok;
-pingMonitor(Name, _) ->
+ping(_, pong) -> ok;
+ping(Name, _) ->
   wait(),
-  pingMonitor(Name, net_adm:ping(Name)).
-
-pingTestingSystem(_, pong) -> ok;
-pingTestingSystem(Name, _) ->
-  wait(),
-  pingTestingSystem(Name, net_adm:ping(Name)).
-
-pingController(_, pong) -> ok;
-pingController(Name, _) ->
-  wait(),
-  pingController(Name, net_adm:ping(Name)).
-
-pingClientApp(_, pong) -> ok;
-pingClientApp(Name, _) ->
-  wait(),
-  pingClientApp(Name, net_adm:ping(Name)).
-
-pingTeam(_, pong) -> ok;
-pingTeam(Name, _) ->
-  wait(),
-  pingTeam(Name, net_adm:ping(Name)).
+  ping(Name, net_adm:ping(Name)).
 
 startMonitor(ClientAppNodeName) ->
   global:register_name(monitor, self()),
-  pingClientApp(ClientAppNodeName, pang),
+  ping(ClientAppNodeName, pang),
   ProblemCount = 5,
   monitor(initMonitor(maps:new(), ProblemCount)).
 
 startTestingSystem(ControllerNodeName) ->
   global:register_name(testing_system, self()),
-  pingController(ControllerNodeName, pang),
+  ping(ControllerNodeName, pang),
   testingSystem().
 
 startController(TestingSystemNodeName, MonitorNodeName) ->
   global:register_name(controller, self()),
-  pingTestingSystem(TestingSystemNodeName, pang),
-  pingMonitor(MonitorNodeName, pang),
+  ping(TestingSystemNodeName, pang),
+  ping(MonitorNodeName, pang),
   PidTestingSystem = global:whereis_name(testing_system),
   controller(PidTestingSystem).
 
 startClientApp(ControllerNodeName, TeamNodeName, MonitorNodeName) ->
   global:register_name(client_app, self()),
-  pingController(ControllerNodeName, pang),
-  pingTeam(TeamNodeName, pang),
-  pingMonitor(MonitorNodeName, pang),
+  ping(ControllerNodeName, pang),
+  ping(TeamNodeName, pang),
+  ping(MonitorNodeName, pang),
   PidMonitor = global:whereis_name(monitor),
   PidController = global:whereis_name(controller),
   clientApp(PidMonitor, PidController).
 
 startTeam(ClientAppNodeName) ->
   global:register_name(team, self()),
-  pingClientApp(ClientAppNodeName, pang),
+  ping(ClientAppNodeName, pang),
   PidClientApp = global:whereis_name(client_app),
   ProblemCount = 5,
   team(PidClientApp, rand:uniform(ProblemCount)).
