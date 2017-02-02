@@ -3,6 +3,17 @@
 
 -export([main/0, startMonitor/1, startTestingSystem/1, startController/2, startClientApp/3, startTeam/1]).
 
+formatList(List) ->
+  io:format("["),
+  formatListU(List),
+  io:format("]~n").
+
+formatListU([]) -> ok;
+formatListU([H]) -> io:format("~p", [H]);
+formatListU([H | T]) ->
+  io:format("~p, ", [H]),
+  formatListU(T).
+
 teamAction() ->
   Rand = rand:uniform(2),
   if
@@ -24,8 +35,9 @@ team(PidClientApp) ->
       PidClientApp ! {team, self()}
   end,
   receive
-    client_app ->
-      io:format("Team get monitor~n"),
+    {client_app, Monitor} ->
+      io:format("Team get monitor: "),
+      formatList(Monitor),
       team(PidClientApp)
   end.
 
@@ -34,11 +46,12 @@ utility(PidMonitor, PidTeam) ->
   io:format("Client App requested monitor~n"),
   PidMonitor ! {client_app, self()},
   receive
-    monitor ->
-      io:format("Client App get monitor~n"),
+    {monitor, Monitor} ->
+      io:format("Client App get monitor: "),
+      formatList(Monitor),
       timer:sleep(random:uniform(1000)),
       io:format("Client App send monitor to team~n"),
-      PidTeam ! client_app
+      PidTeam ! {client_app, Monitor}
   end.
 
 clientApp(PidMonitor, PidController) ->
@@ -59,7 +72,8 @@ monitor() ->
     {client_app, ClientAppPid} ->
       timer:sleep(random:uniform(1000)),
       io:format("Monitor returned to client app~n"),
-      ClientAppPid ! monitor,
+      Monitor = [{1, "AC"}, {2, "WA"}, {3, "TL"}],
+      ClientAppPid ! {monitor, Monitor},
       monitor();
     {controller, ProblemId, Verdict} ->
       io:format("Monitor get ~s (Problem ~w)~n", [Verdict, ProblemId]),
