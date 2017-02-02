@@ -201,4 +201,4 @@ startTeam(ClientAppNodeName) ->
   pingClientApp(ClientAppNodeName, pang),
   PidClientApp = global:whereis_name(client_app),
   ProblemCount = 5,
-  team(PidClientApp, ProblemCount).
+  team(PidClientApp, rand:uniform(ProblemCount)).
